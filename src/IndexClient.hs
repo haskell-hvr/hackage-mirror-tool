@@ -44,11 +44,13 @@ updateIndex hackageUri cacheDir = do
 
             checkForUpdates rep (Just now)
   where
-    -- FIXME
+    -- hardcoded keys for now
     initialRootKeys =
-        [ KeyId "89e692e45b53b575f79a02f82fe47359b0b577dec23b45d846d6e734ffcc887a"
-        , KeyId "dc4b6619e8ea2a0b72cad89a3803382f6acc8beda758be51660b5ce7c15e535b"
-        , KeyId "1035a452fd3ada87956f9e77595cfd5e41446781d7ba9ff9e58b94488ac0bad7"
+        [ KeyId "fe331502606802feac15e514d9b9ea83fee8b6ffef71335479a2e68d84adc6b0"
+        , KeyId "1ea9ba32c526d1cc91ab5e5bd364ec5e9e8cb67179a471872f6e26f0ae773d42"
+        , KeyId "2c6c3627bd6c982990239487f1abd02e08a02e6cf16edb105a8012d444d870c3"
+        , KeyId "0a5c7ea47cd1b15f01f5f51a33adda7e655bc0f0b0615baa8e271f4c3351e21d"
+        , KeyId "51f0161b906011b52c6613376b1ae937670da69322113a246a09f807c62f6921"
         ]
 
     layout :: CacheLayout
