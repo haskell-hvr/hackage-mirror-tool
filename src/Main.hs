@@ -19,9 +19,7 @@ import           Data.String
 import           Data.Time.Clock.POSIX    (getPOSIXTime)
 import           Network.Http.Client
 import           System.Environment       (getEnv)
-import           System.IO.Unsafe         (unsafePerformIO)
-import           Options.Applicative      hiding ((<>))
-import qualified Options.Applicative      as OA
+import           Options.Applicative
 
 import           IndexClient
 import           IndexShaSum              (IndexShaEntry (..))
@@ -31,29 +29,11 @@ import           System.Exit
 
 ----------------------------------------------------------------------------
 
-{-# NOINLINE s3cfg #-}
-s3cfg :: S3Cfg
-s3cfg = S3Cfg {..}
-  where
-    s3cfgBaseUrl   = "https://objects-us-west-1.dream.io"
-    s3cfgBucketId  = "hackage-mirror"
-    s3cfgAccessKey = fromString <$> unsafePerformIO $ getEnv "S3_ACCESS_KEY"
-    s3cfgSecretKey = fromString <$> unsafePerformIO $ getEnv "S3_SECRET_KEY"
-
--- used for index-download
-hackageUri :: URI
-hackageUri = fromMaybe (error "hackageUri") $ parseURI "http://hackage.haskell.org"
-
--- used for downloading source-tarballs
-hackagePackageUri :: URL
-hackagePackageUri = "http://hackage.haskell.org/package/"
--- hackagePackageUri = "http://hackage.fpcomplete.com/package/"
--- hackagePackageUri = "http://hdiff.luite.com/packages/archive/package/"
 
 ----------------------------------------------------------------------------
 
-getSourceTarball :: ShortByteString -> IO (Either Int ByteString)
-getSourceTarball pkgname = do
+getSourceTarball :: URL -> ShortByteString -> IO (Either Int ByteString)
+getSourceTarball hackagePackageUri pkgname = do
     -- putStrLn ("fetching " <> show pkgname <> " ...")
     t0 <- getPOSIXTime
     resp <- try $ get (hackagePackageUri <> BSS.fromShort pkgname) concatHandler'
@@ -71,25 +51,59 @@ getSourceTarball pkgname = do
 -- CLI
 
 data Opts = Opts
-    { optDryMode :: Bool
+    { optDryMode       :: Bool
+    , optForceSync     :: Bool
+    , optHackageUrl    :: String
+    , optHackagePkgUrl :: String
+    , optS3BaseUrl     :: String
+    , optS3BucketId    :: String
     }
 
 getOpts :: IO Opts
-getOpts = OA.execParser opts
+getOpts = execParser opts
   where
     opts = info (helper <*> parseOpts)
-           (fullDesc OA.<> header "Hackage mirroring tool")
+           (fullDesc <> header "Hackage mirroring tool"
+                     <> footer fmsg
+           )
 
-    parseOpts = Opts <$> switch (long "dry")
+    parseOpts = Opts <$> switch (long "dry" <> help "operate in read-only mode")
+                     <*> switch (long "force-sync" <> help "force a full sync even when meta-data appears synced")
+                     <*> strOption (long "hackage-url" <> value "http://hackage.haskell.org"
+                                    <> metavar "URL"
+                                    <> help "URL used to retrieve Hackage meta-data" <> showDefault)
+                     <*> strOption (long "hackage-pkg-url" <> value "http://hackage.haskell.org/package/"
+                                    <> metavar "URL"
+                                    <> help "URL used to retrieve Hackage package tarballs" <> showDefault)
+                     <*> strOption (long "s3-base-url" <> value "https://objects-us-west-1.dream.io"
+                                    <> metavar "URL"
+                                    <> help "Base URL of S3 mirror bucket" <> showDefault)
+                     <*> strOption (long "s3-bucket-id" <> value "hackage-mirror"
+                                    <> help "id of S3 mirror bucket" <> showDefault)
+
+
+    fmsg = "Credentials are set via 'S3_ACCESS_KEY' & 'S3_SECRET_KEY' environment variables"
+
 
 main :: IO ()
 main = do
     Opts{..} <- getOpts
 
+    let s3cfgBaseUrl   = fromString optS3BaseUrl
+        s3cfgBucketId  = fromString optS3BucketId
+    s3cfgAccessKey <- fromString <$> getEnv "S3_ACCESS_KEY"
+    s3cfgSecretKey <- fromString <$> getEnv "S3_SECRET_KEY"
+
+    main2 (Opts{..}) (S3Cfg{..})
+
+main2 :: Opts -> S3Cfg -> IO ()
+main2 Opts{..} S3Cfg{..} = do
     when optDryMode $
         logMsg WARNING "--dry mode active"
 
-    let !_ = s3cfg
+    -- used for index-download
+    let hackageUri = fromMaybe (error "hackageUri") $ parseURI optHackageUrl
+
 
     repoCacheDir <- makeAbsolute (fromFilePath "./index-cache/")
 
@@ -107,7 +121,7 @@ main = do
 
     -- check meta-data files first to detect if anything needs to be done
     logMsg INFO "fetching meta-data file objects from S3..."
-    metafiles <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListObjectsFolder s3cfg
+    metafiles <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListObjectsFolder (S3Cfg{..})
     metadirties <- forM jsonFiles $ \fn -> do
         objdat <- readStrictByteString (repoCacheDir </> fn)
 
@@ -120,7 +134,7 @@ main = do
 
         pure dirty
 
-    unless (or metadirties) $ do
+    unless (optForceSync || or metadirties) $ do
         -- NB: 01-index.tar.gz is not compared
         logMsg INFO "meta-data files are synced and '--force-sync' was not given; nothing to do"
         exitSuccess
@@ -133,7 +147,7 @@ main = do
     logMsg INFO ("Hackage index contains " <> show (length idx) <> " src-tarball entries")
 
     logMsg INFO "Listing all S3 objects (may take a while) ..."
-    objmap <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListAllObjects s3cfg
+    objmap <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListAllObjects (S3Cfg{..})
 
     let s3cnt = length (filter (BS.isPrefixOf "package/" . BSS.fromShort) (HM.keys objmap))
     logMsg INFO ("S3 index contains " <> show s3cnt <> " src-tarball entries (total " <> show (HM.size objmap) <> ")")
@@ -143,7 +157,7 @@ main = do
     -- fire up some workers...
     workers <- forM [1..maxWorkers :: Int] $ \n -> async $ do
         bracket (establishConnection s3cfgBaseUrl) closeConnection $
-            worker optDryMode idxQ objmap n
+            worker idxQ objmap n
 
     forM_ workers link
 
@@ -154,20 +168,35 @@ main = do
     bracket (establishConnection s3cfgBaseUrl) closeConnection $ \c -> do
         -- this one can take ~1 minute; so we need to update this first
         do tmp <- readStrictByteString (repoCacheDir </> indexTarFn)
-           syncFile optDryMode objmap tmp (pathToObjKey indexTarFn) c
+           syncFile objmap tmp (pathToObjKey indexTarFn) c
 
         forM_ jsonFiles $ \fn -> do
             tmp <- readStrictByteString (repoCacheDir </> fn)
-            syncFile optDryMode objmap tmp (pathToObjKey fn) c
+            syncFile objmap tmp (pathToObjKey fn) c
 
     logMsg INFO "sync job completed"
 
     return ()
   where
-    S3Cfg {..} = s3cfg
     maxWorkers = 4
 
-    syncFile drymode objmap objdat objkey c = do
+    -- used for downloading source-tarballs
+    hackagePackageUri = fromString optHackagePkgUrl
+    -- hackagePackageUri = "http://hackage.haskell.org/package/"
+    -- hackagePackageUri = "http://hackage.fpcomplete.com/package/"
+    -- hackagePackageUri = "http://hdiff.luite.com/packages/archive/package/"
+
+    s3PutObject' :: Connection -> Int -> ByteString -> ObjKey -> IO ()
+    s3PutObject' conn thrId objdat objkey = do
+        t0 <- getPOSIXTime
+        if optDryMode
+            then logMsg WARNING "no-op due to --dry"
+            else s3PutObject (S3Cfg{..}) conn objdat objkey
+        t1 <- getPOSIXTime
+        logMsg DEBUG ("PUT completed; thr=" <> show thrId <> " dt=" ++ show (t1-t0))
+
+
+    syncFile objmap objdat objkey conn = do
         let obj_md5 = md5hash objdat
             obj_sz  = BS.length objdat
         let dirty = case HM.lookup objkey objmap of
@@ -177,24 +206,19 @@ main = do
            then logMsg INFO  (show objkey ++ " needs sync")
            else logMsg DEBUG (show objkey ++ " is up-to-date")
 
-        when dirty $ do
-            t0 <- getPOSIXTime
-            if drymode
-                then logMsg WARNING "no-op due to --dry"
-                else s3PutObject s3cfg c objdat objkey
-            t1 <- getPOSIXTime
-            logMsg DEBUG ("PUT completed; dt=" ++ show (t1-t0))
+        when dirty $ s3PutObject' conn 0 objdat objkey
 
         return ()
 
-    worker drymode idxQ objmap thrId c = do
+
+    worker idxQ objmap thrId conn = do
         tmp <- modifyMVar idxQ (pure . popQ)
         case tmp of
             Nothing -> return () -- queue empty, terminate worker
             Just (IndexShaEntry pkg s256 m5 sz) -> do
                 case (HM.lookup ("package/" <> pkg) objmap) of
                     Nothing -> do -- miss
-                        resp <- getSourceTarball pkg
+                        resp <- getSourceTarball hackagePackageUri pkg
                         case resp of
                             Right pkgdat -> do
                                 let s256' = sha256hash pkgdat
@@ -207,12 +231,7 @@ main = do
                                 unless (m5 == m5') $
                                     fail "sha256 mismatch"
 
-                                t0 <- getPOSIXTime
-                                if drymode
-                                    then logMsg WARNING "no-op due to --dry"
-                                    else s3PutObject s3cfg c pkgdat ("package/" <> pkg)
-                                t1 <- getPOSIXTime
-                                logMsg DEBUG ("PUT completed; thr=" <> show thrId <> " dt=" ++ show (t1-t0))
+                                s3PutObject' conn thrId pkgdat ("package/" <> pkg)
 
                             Left _ -> logMsg WARNING "**skipping**" -- TODO: collect
 
@@ -225,7 +244,7 @@ main = do
                               fail "MD5 corruption"
                         return ()
                 -- loop
-                worker drymode idxQ objmap thrId c
+                worker idxQ objmap thrId conn
       where
         popQ []     = ([],Nothing)
         popQ (x:xs) = (xs, Just x)

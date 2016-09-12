@@ -139,7 +139,7 @@ stripSuffixBS sfx b
 -- Workaround needed until <https://github.com/haskell/hackage-server/issues/488>
 -- is fixed.
 fixupIdx :: IndexShaEntry -> IndexShaEntry
-fixupIdx ent@(IndexShaEntry k s256 m5 sz)
+fixupIdx ent@(IndexShaEntry k s256 _m5 sz)
   | sz < 0 || s256 == sha256zero
     = case [ ent' | ent'@(IndexShaEntry k' _ _ _) <- IndexShaSum.brokenEntries, k' == k ] of
         [x] -> x
