@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -94,7 +95,9 @@ main = do
     s3cfgAccessKey <- fromString <$> getEnv "S3_ACCESS_KEY"
     s3cfgSecretKey <- fromString <$> getEnv "S3_SECRET_KEY"
 
-    main2 (Opts{..}) (S3Cfg{..})
+    try (main2 (Opts{..}) (S3Cfg{..})) >>= \case
+        Left e   -> logMsg CRITICAL ("exception: " ++ displayException (e::SomeException))
+        Right () -> logMsg INFO "exiting"
 
 main2 :: Opts -> S3Cfg -> IO ()
 main2 Opts{..} S3Cfg{..} = do
