@@ -36,6 +36,8 @@ import           Data.Time.Format           (defaultTimeLocale)
 import qualified Data.Time.Format           as DT
 import           Hackage.Security.Util.Path
 import           System.IO
+import           System.Posix.Process       (getProcessID)
+import           Text.Printf                (printf)
 
 newtype SHA256Val = SHA256Val ShortByteString
                   deriving (Eq,Ord,Hashable,NFData)
@@ -102,8 +104,10 @@ data LogPrio
 
 logMsg :: LogPrio -> String -> IO ()
 logMsg prio msg = do
+    !pid <- fromIntegral <$> getProcessID
     evaluate (rnf msg)
-    now <- getCurrentTime
-    let ts = DT.formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S.%q" now
-    putStrLn (take 23 ts ++ "Z | *" ++ show prio ++ "* " ++ msg)
+    !now <- getCurrentTime
+    printf "%s [%5d] *%s* %s\n" (fmtTS now) (pid::Int) (show prio) msg
     hFlush stdout
+  where
+    fmtTS now = take 23 (DT.formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S.%q" now) ++ "Z"
