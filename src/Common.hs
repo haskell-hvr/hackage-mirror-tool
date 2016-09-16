@@ -35,6 +35,7 @@ import           Data.Time.Clock            (getCurrentTime)
 import           Data.Time.Format           (defaultTimeLocale)
 import qualified Data.Time.Format           as DT
 import           Hackage.Security.Util.Path
+import           System.IO
 
 newtype SHA256Val = SHA256Val ShortByteString
                   deriving (Eq,Ord,Hashable,NFData)
@@ -105,5 +106,4 @@ logMsg prio msg = do
     now <- getCurrentTime
     let ts = DT.formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S.%q" now
     putStrLn (take 23 ts ++ "Z | *" ++ show prio ++ "* " ++ msg)
-  where
-
+    hFlush stdout
