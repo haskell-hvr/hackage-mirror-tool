@@ -20,7 +20,7 @@ import           Data.String
 import           Data.Time.Clock.POSIX    (getPOSIXTime)
 import           Network.Http.Client
 import           System.Environment       (getEnv)
-import           Options.Applicative
+import           Options.Applicative as OA
 
 import           IndexClient
 import           IndexShaSum              (IndexShaEntry (..))
@@ -58,6 +58,7 @@ data Opts = Opts
     , optHackagePkgUrl :: String
     , optS3BaseUrl     :: String
     , optS3BucketId    :: String
+    , optMaxConns      :: Word
     }
 
 getOpts :: IO Opts
@@ -81,6 +82,8 @@ getOpts = execParser opts
                                     <> help "Base URL of S3 mirror bucket" <> showDefault)
                      <*> strOption (long "s3-bucket-id" <> value "hackage-mirror"
                                     <> help "id of S3 mirror bucket" <> showDefault)
+                     <*> OA.option auto (long "max-connections" <> metavar "NUM" <> value 1
+                                    <> help "max concurrent download connections" <> showDefault)
 
 
     fmsg = "Credentials are set via 'S3_ACCESS_KEY' & 'S3_SECRET_KEY' environment variables"
@@ -96,11 +99,18 @@ main = do
     s3cfgSecretKey <- fromString <$> getEnv "S3_SECRET_KEY"
 
     try (main2 (Opts{..}) (S3Cfg{..})) >>= \case
-        Left e   -> logMsg CRITICAL ("exception: " ++ displayException (e::SomeException))
-        Right () -> logMsg INFO "exiting"
+        Left e   -> do
+            logMsg CRITICAL ("exception: " ++ displayException (e::SomeException))
+            exitFailure
+        Right ExitSuccess -> do
+            logMsg INFO "exiting"
+            exitSuccess
+        Right (ExitFailure rc) -> do
+            logMsg ERROR ("exiting (code = " ++ show rc ++ ")")
+            exitWith (ExitFailure rc)
 
-main2 :: Opts -> S3Cfg -> IO ()
-main2 Opts{..} S3Cfg{..} = do
+main2 :: Opts -> S3Cfg -> IO ExitCode
+main2 Opts{..} S3Cfg{..} = handle pure $ do
     when optDryMode $
         logMsg WARNING "--dry mode active"
 
@@ -158,7 +168,7 @@ main2 Opts{..} S3Cfg{..} = do
     idxQ <- newMVar idx
 
     -- fire up some workers...
-    workers <- forM [1..maxWorkers :: Int] $ \n -> async $ do
+    workers <- forM [1.. optMaxConns] $ \n -> async $ do
         bracket (establishConnection s3cfgBaseUrl) closeConnection $
             worker idxQ objmap n
 
@@ -179,17 +189,15 @@ main2 Opts{..} S3Cfg{..} = do
 
     logMsg INFO "sync job completed"
 
-    return ()
+    return ExitSuccess
   where
-    maxWorkers = 4
-
     -- used for downloading source-tarballs
     hackagePackageUri = fromString optHackagePkgUrl
     -- hackagePackageUri = "http://hackage.haskell.org/package/"
     -- hackagePackageUri = "http://hackage.fpcomplete.com/package/"
     -- hackagePackageUri = "http://hdiff.luite.com/packages/archive/package/"
 
-    s3PutObject' :: Connection -> Int -> ByteString -> ObjKey -> IO ()
+    s3PutObject' :: Connection -> Word -> ByteString -> ObjKey -> IO ()
     s3PutObject' conn thrId objdat objkey = do
         t0 <- getPOSIXTime
         if optDryMode
