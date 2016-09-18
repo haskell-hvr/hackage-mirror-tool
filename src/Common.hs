@@ -6,6 +6,8 @@ module Common
     , module Data.Maybe
     , module Hackage.Security.Util.Path
     , module Data.Semigroup
+    , module Data.Word
+    , module Data.Int
     , ByteString
     , ShortByteString
     , Text
@@ -34,6 +36,8 @@ import           Data.Text                  (Text)
 import           Data.Time.Clock            (getCurrentTime)
 import           Data.Time.Format           (defaultTimeLocale)
 import qualified Data.Time.Format           as DT
+import           Data.Word
+import           Data.Int
 import           Hackage.Security.Util.Path
 import           System.IO
 import           System.Posix.Process       (getProcessID)

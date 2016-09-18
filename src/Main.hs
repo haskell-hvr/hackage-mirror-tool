@@ -156,8 +156,9 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
     -- dirty meta-files detected, do full sync
 
     idx <- IndexShaSum.run (IndexShaSum.IndexShaSumOptions True (repoCacheDir </> indexTarFn) Nothing)
+    let idxBytes = sum [ fromIntegral sz | IndexShaEntry _ _ _ sz <- idx, sz >= 0 ] :: Word64
 
-    logMsg INFO ("Hackage index contains " <> show (length idx) <> " src-tarball entries")
+    logMsg INFO ("Hackage index contains " <> show (length idx) <> " src-tarball entries (" <> show idxBytes <> " bytes)")
 
     logMsg INFO "Listing all S3 objects (may take a while) ..."
     objmap <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListAllObjects (S3Cfg{..})
