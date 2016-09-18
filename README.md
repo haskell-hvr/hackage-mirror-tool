@@ -1,5 +1,6 @@
-Hackage mirroring tool
+Hackage mirroring tool  [![Build Status](https://travis-ci.org/hvr/hackage-mirror-tool.svg?branch=master)](https://travis-ci.org/hvr/hackage-mirror-tool)
 ======================
+
 
 This is a simple tool for mirroring to S3-compatible object stores
 (e.g. Dreamhost or AWS).
