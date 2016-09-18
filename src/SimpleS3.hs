@@ -20,7 +20,7 @@ module SimpleS3
 import           Common
 
 import qualified Blaze.ByteString.Builder as Builder
--- import           Control.Exception
+import           Control.Exception
 import           Control.Monad
 import qualified Crypto.Hash.MD5          as MD5
 import qualified Crypto.Hash.SHA1         as SHA1
@@ -60,18 +60,58 @@ data ObjMetaInfo = OMI
 pathToObjKey :: Path Unrooted -> ObjKey
 pathToObjKey = fromString . toUnrootedFilePath
 
+
+data S3ListStream
+    = S3ListFrag  [ObjMetaInfo]  {- next -}  (IO S3ListStream) {- terminate -} (IO ())
+    | S3ListEx    SomeException  {- retry -} (IO S3ListStream) {- terminates by default -}
+    | S3ListDone {- terminates by default -}
+
+-- | Stream bucket listing of objects
+s3ListStreamAllObjects :: S3Cfg -> IO S3ListStream
+s3ListStreamAllObjects S3Cfg{..} = go Nothing Nothing
+  where
+    go :: Maybe ObjKey -> Maybe Connection -> IO S3ListStream
+    go mmarker Nothing = do
+        res <- try $ establishConnection s3cfgBaseUrl
+        case res of
+          Left e -> pure (S3ListEx e (go mmarker Nothing))
+          Right c -> go mmarker (Just c)
+    go mmarker (Just c) = do
+        res <- try $ s3ListObjects1 S3Cfg{..} c "" mmarker True
+        case res of
+          Left e -> pure (S3ListEx e (go mmarker Nothing))
+          Right (isTrunc, objs)
+              | isTrunc -> do
+                    let mmarker' = Just $ omiKey (last objs)
+                    pure $ S3ListFrag objs
+                                      (go mmarker' (Just c))
+                                      (closeConnection c)
+              | otherwise -> do
+                    closeConnection c
+                    if null objs
+                        then pure S3ListDone
+                        else pure $ S3ListFrag objs
+                                               (pure S3ListDone)
+                                               (pure ())
+
 -- | List all objects in a bucket
 --
 -- May require multiple requests if result contains more than 1000 entries
-s3ListAllObjects :: S3Cfg -> Connection -> IO (HashMap ObjKey ObjMetaInfo)
-s3ListAllObjects s3cfg c = HM.fromList . map (\obj->(omiKey obj,obj)) . concat <$> go [] Nothing
+s3ListAllObjects :: S3Cfg -> IO (HashMap ObjKey ObjMetaInfo)
+s3ListAllObjects s3cfg = s3ListStreamAllObjects s3cfg >>= go 5 []
   where
-    go acc mmarker = do
-        (isTrunc, objs) <- s3ListObjects1 s3cfg c "" mmarker True
-        -- print (isTrunc, length objs, omiKey (head objs), omiKey (last objs))
-        if isTrunc
-           then go     (objs : acc) (Just $ omiKey (last objs))
-           else return (objs : acc)
+    go :: Int -> [[ObjMetaInfo]] -> S3ListStream -> IO (HashMap ObjKey ObjMetaInfo)
+    go !_        !acc S3ListDone = evaluate $ lst2hm . concat $ acc
+    go maxRetries acc (S3ListEx ex retry)
+      | maxRetries > 1 = retry >>= go (maxRetries-1) acc
+      | otherwise      = do
+            putStrLn "s3ListAllObjects needed more than 5 retries"
+            throwIO ex
+
+    go maxRetries acc (S3ListFrag objs next _) =
+        go maxRetries (objs:acc) =<< next
+
+    lst2hm = HM.fromList . map (\obj->(omiKey obj,obj))
 
 -- TODO: currently supports only non-paginated top-level folder
 s3ListObjectsFolder :: S3Cfg -> Connection -> IO (HashMap ObjKey ObjMetaInfo)
@@ -102,6 +142,9 @@ s3ListObjects1 (s3cfg@S3Cfg {..}) c pfx marker recurse = do
 
     return (isTrunc,conts)
   where
+    -- we could use max-keys=, but unfortunately AWS S3 doesn't appear
+    -- to support returning more than 1000 entries (which is the
+    -- default anyway)
     qryparms = [ "prefix=" <> BSS.fromShort pfx | pfx /= "" ] ++
                [ "delimiter=/" | not recurse ] ++
                [ "marker=" <> BSS.fromShort x | Just x <- [marker] ]

@@ -161,9 +161,9 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
     logMsg INFO ("Hackage index contains " <> show (length idx) <> " src-tarball entries (" <> show idxBytes <> " bytes)")
 
     logMsg INFO "Listing all S3 objects (may take a while) ..."
-    objmap <- bracket (establishConnection s3cfgBaseUrl) closeConnection $ s3ListAllObjects (S3Cfg{..})
+    objmap <- s3ListAllObjects (S3Cfg{..})
 
-    let s3cnt = length (filter (BS.isPrefixOf "package/" . BSS.fromShort) (HM.keys objmap))
+    let s3cnt = length (filter isSrcTarObjKey (HM.keys objmap))
     logMsg INFO ("S3 index contains " <> show s3cnt <> " src-tarball entries (total " <> show (HM.size objmap) <> ")")
 
     idxQ <- newMVar idx
@@ -192,11 +192,14 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
 
     return ExitSuccess
   where
-    -- used for downloading source-tarballs
-    hackagePackageUri = fromString optHackagePkgUrl
-    -- hackagePackageUri = "http://hackage.haskell.org/package/"
-    -- hackagePackageUri = "http://hackage.fpcomplete.com/package/"
-    -- hackagePackageUri = "http://hdiff.luite.com/packages/archive/package/"
+    isSrcTarObjKey k =
+        and [ BS.isPrefixOf "package/" k'
+            , BS.isSuffixOf ".tar.gz" k'
+            , BS.count 0x2f k' == 1
+            ]
+      where
+        k' = BSS.fromShort k
+
 
     s3PutObject' :: Connection -> Word -> ByteString -> ObjKey -> IO ()
     s3PutObject' conn thrId objdat objkey = do
@@ -230,7 +233,7 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
             Just (IndexShaEntry pkg s256 m5 sz) -> do
                 case (HM.lookup ("package/" <> pkg) objmap) of
                     Nothing -> do -- miss
-                        resp <- getSourceTarball hackagePackageUri pkg
+                        resp <- getSourceTarball (fromString optHackagePkgUrl) pkg
                         case resp of
                             Right pkgdat -> do
                                 let s256' = sha256hash pkgdat
