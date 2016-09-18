@@ -43,7 +43,7 @@ type SrcTarName   = BSS.ShortByteString -- with .tar.gz suffix
 run :: IndexShaSumOptions -> IO [IndexShaEntry]
 run (IndexShaSumOptions {..}) = do
     idx <- readTarEntries optISSIndexTar
-    pure (map fixupIdx $ collect idx)
+    pure (map fixupIdx $ filter (not . isBlacklisted) $ collect idx)
   where
     collect :: [Tar.Entry] -> [IndexShaEntry]
     collect = go mempty mempty
@@ -133,6 +133,17 @@ stripSuffixBS sfx b
   | otherwise           = Nothing
 
 
+
+-- | Blacklisted entries
+--
+-- Workaround needed until hackage-server provides a way to mark
+-- "removed" releases in the 01-index.tar
+isBlacklisted :: IndexShaEntry -> Bool
+isBlacklisted (IndexShaEntry k _ _ _) = k `elem` blacklist
+  where
+    blacklist = [ "hermes-1.3.4.3.tar.gz"
+                , "tslib-0.1.4.tar.gz"
+                ]
 
 -- | Inject missing SHA256 sums
 --
