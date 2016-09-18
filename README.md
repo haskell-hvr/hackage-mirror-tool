@@ -52,3 +52,35 @@ timeout -k5 170 ${HOME}/bin/hackage-mirror-tool +RTS -t -A2M -M256M -RTS \
 The `timeout -k5 170` arguments are defined that way in order to
 ensure that the current job is killed before the next cronjob gets
 started.
+
+## Sample AWS access policy
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "bucketlevel",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::hackage-mirror-tool"
+            ]
+        },
+        {
+            "Sid": "objectlevel",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+            ],
+            "Resource": [
+                "arn:aws:s3:::hackage-mirror-tool/*"
+            ]
+        }
+    ]
+}
+```
