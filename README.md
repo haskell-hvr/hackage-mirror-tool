@@ -8,6 +8,15 @@ This is a simple tool for mirroring to S3-compatible object stores
 See also `hackage-mirror-tool --help`.
 
 
+## Resource requirements
+
+Currently, using this tool to operate a http://hackage.haskell.org
+mirror has the following requirements:
+
+ - ~1 GiB local filesystem storage (used for by local 01-index.tar cache)
+ - ~10 GiB of storage in S3 bucket (at time of writing ~7.1 GiB were needed, this size increases monotonoically over time)
+ - A single-threaded `hackage-mirror-tool` run needs (less than) ~256 MiB RAM; IOW, a small 512 MiB RAM VM configuration suffices.
+
 ## Example usages
 
 ### `cronjob`-based
@@ -32,7 +41,7 @@ cd ${HOME}/workdir/
 
 S3_ACCESS_KEY="ASJKDS..." \
 S3_SECRET_KEY="asdjhakjsdhadhadjhaljkdh..." \
-timeout -k5 170 ${HOME}/bin/hackage-mirror-tool +RTS -t -RTS \
+timeout -k5 170 ${HOME}/bin/hackage-mirror-tool +RTS -t -A2M -M256M -RTS \
   --hackage-url      http://hackage.haskell.org \
   --hackage-pkg-url  http://hackage.haskell.org/package/ \
   --s3-base-url      https://s3.amazonaws.com \
