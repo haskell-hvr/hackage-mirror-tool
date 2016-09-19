@@ -130,10 +130,17 @@ s3ListObjects1 (s3cfg@S3Cfg {..}) c pfx marker recurse = do
     tmp <- receiveResponse c concatHandler'
     -- BC8.writeFile "debug.get.xml" tmp
 
-    let [lbresult] = filterContent (s3qname "ListBucketResult") $ X.parseXML tmp
+    lbresult <-
+        case filterContent (s3qname "ListBucketResult") $ X.parseXML tmp of
+            [x] -> return x
+            res -> error $ "filterContent ListBucketResult failure: " ++ show res
 
     let conts_ = X.findChildren (s3qname "Contents") lbresult
-        Just conts  = mapM parseXML conts_ :: Maybe [ObjMetaInfo]
+
+    conts <- forM conts_ $ \c ->
+        case parseXML c :: Maybe ObjMetaInfo of
+            Nothing -> error $ "parseXML ObjMetaInfo failed: " ++ show c
+            Just x -> return x
 
     let !isTrunc = case s3xmlGetStr lbresult "IsTruncated" of
             Just "true"  -> True
