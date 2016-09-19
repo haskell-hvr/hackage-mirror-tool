@@ -244,7 +244,7 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
                                 unless (s256 == s256') $
                                     fail "sha256 mismatch"
                                 unless (m5 == m5') $
-                                    fail "sha256 mismatch"
+                                    fail "md5 mismatch"
 
                                 s3PutObject' conn thrId pkgdat ("package/" <> pkg)
 

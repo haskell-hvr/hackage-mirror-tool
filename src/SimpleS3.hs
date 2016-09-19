@@ -139,7 +139,7 @@ s3ListObjects1 (s3cfg@S3Cfg {..}) c pfx marker recurse = do
 
     conts <- forM conts_ $ \c ->
         case parseXML c :: Maybe ObjMetaInfo of
-            Nothing -> error $ "parseXML ObjMetaInfo failed: " ++ show c
+            Nothing -> error $ "parseXML ObjMetaInfo failed: " ++ X.showElement c
             Just x -> return x
 
     let !isTrunc = case s3xmlGetStr lbresult "IsTruncated" of
