@@ -133,19 +133,19 @@ s3ListObjects1 (s3cfg@S3Cfg {..}) c pfx marker recurse = do
     lbresult <-
         case filterContent (s3qname "ListBucketResult") $ X.parseXML tmp of
             [x] -> return x
-            res -> error $ "filterContent ListBucketResult failure: " ++ show res
+            res -> fail $ "filterContent ListBucketResult failure: " ++ show res
 
     let conts_ = X.findChildren (s3qname "Contents") lbresult
 
-    conts <- forM conts_ $ \c ->
-        case parseXML c :: Maybe ObjMetaInfo of
-            Nothing -> error $ "parseXML ObjMetaInfo failed: " ++ X.showElement c
+    conts <- forM conts_ $ \cont ->
+        case parseXML cont :: Maybe ObjMetaInfo of
+            Nothing -> fail $ "parseXML ObjMetaInfo failed: " ++ X.showElement cont
             Just x -> return x
 
-    let !isTrunc = case s3xmlGetStr lbresult "IsTruncated" of
-            Just "true"  -> True
-            Just "false" -> False
-            _ -> error "s3ListObjects1: invalid or missing IsTruncated field"
+    isTrunc <- case s3xmlGetStr lbresult "IsTruncated" of
+            Just "true"  -> pure True
+            Just "false" -> pure False
+            _ -> fail "invalid or missing IsTruncated field"
 
     return (isTrunc,conts)
   where
