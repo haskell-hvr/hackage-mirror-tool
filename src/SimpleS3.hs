@@ -267,7 +267,12 @@ instance FromXML ObjMetaInfo where
         omiKey   <- (fromString . X.strContent) <$> X.findChild (s3qname "Key") el
         omiEtag_ <- X.strContent <$> X.findChild (s3qname "ETag") el
         omiMD5'  <- readMaybe omiEtag_
-        omiMD5   <- md5unhex omiMD5'
+        -- sometimes the reported MD5 is computed over chunks, in
+        -- which case the etag has a "-<num>" suffix. For now, we just
+        -- map those to the special zero MD5 as we can't do anything
+        -- sensible with it anyway (but we may want to be able to
+        -- detect that the MD5 reported was not a proper MD5)
+        omiMD5   <- md5unhex omiMD5' <|> Just md5zero
 
         omiSize_ <- X.strContent <$> X.findChild (s3qname "Size") el
         omiSize  <- readMaybe omiSize_

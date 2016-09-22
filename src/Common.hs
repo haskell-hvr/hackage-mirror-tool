@@ -3,6 +3,7 @@
 
 module Common
     ( module Common
+    , module Control.Applicative
     , module Data.Maybe
     , module Hackage.Security.Util.Path
     , module Data.Semigroup
@@ -16,6 +17,7 @@ module Common
     , NFData
     ) where
 
+import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Exception
 import qualified Crypto.Hash.MD5            as MD5
