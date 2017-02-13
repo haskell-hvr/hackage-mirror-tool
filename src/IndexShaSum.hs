@@ -178,4 +178,5 @@ brokenEntries = force [ IndexShaEntry k s256 m5 s | (k,s256,m5,s) <- tab ]
           , ("hprotoc-2.1.11.tar.gz"              , "87962aee9b1a5e5d7d069d98c5b279e2cf61e0832033ff03aff91de8c7e1463e" , "e893f666126b4c819088db8845261e15", 134796)
           , ("hzaif-0.1.0.0.tar.gz"               , "1d600bf4940412059c0d3916573fd2042c3695d627993fb1277b38e241fa9a55" , "7f36da7a6720ff5a4eed36f462d3deaa",   3094)
           , ("repa-io-3.4.0.2.tar.gz"             , "bfda3a8b5dc92783e6099e361a0e76b0994b26fc7a8073a22696cb3fe6cb8147" , "8c8354d1c50189698205a34b52713039",   5942)
+          , ("gogol-admin-reports-0.2.0.tar.gz"   , "d49e18a038ad1321c1d5de90e6e3b7bdb26f945947ee674dd4679c9a6521afad" , "9ee8804d7a92312e5ce200972b0c6e27",  17792)
           ]
