@@ -1,9 +1,12 @@
-{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- |
+-- Copyright : Herbert Valerio Riedel
+-- License   : GPLv3
+--
 module Main where
 
 import           Common
@@ -13,23 +16,19 @@ import           Control.Concurrent.MVar
 import           Control.Exception
 import           Control.Monad
 import qualified Data.ByteString          as BS
--- import           Data.ByteString.Lazy (toStrict,fromStrict)
 import qualified Data.ByteString.Short    as BSS
 import qualified Data.HashMap.Strict      as HM
 import           Data.String
 import           Data.Time.Clock.POSIX    (getPOSIXTime)
 import           Network.Http.Client
+import           Options.Applicative      as OA
 import           System.Environment       (getEnv)
-import           Options.Applicative as OA
 
 import           IndexClient
 import           IndexShaSum              (IndexShaEntry (..))
 import qualified IndexShaSum
 import           SimpleS3
 import           System.Exit
-
-----------------------------------------------------------------------------
-
 
 ----------------------------------------------------------------------------
 
@@ -155,8 +154,11 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
     ----------------------------------------------------------------------------
     -- dirty meta-files detected, do full sync
 
-    idx <- IndexShaSum.run (IndexShaSum.IndexShaSumOptions True (repoCacheDir </> indexTarFn) Nothing)
+    (idx,missing) <- IndexShaSum.run (IndexShaSum.IndexShaSumOptions True (repoCacheDir </> indexTarFn) Nothing)
     let idxBytes = sum [ fromIntegral sz | IndexShaEntry _ _ _ sz <- idx, sz >= 0 ] :: Word64
+
+    forM_ missing $ \n -> do
+      logMsg CRITICAL ("Package " ++ show n ++ " missing SHA256 sum!")
 
     logMsg INFO ("Hackage index contains " <> show (length idx) <> " src-tarball entries (" <> show idxBytes <> " bytes)")
 
@@ -189,6 +191,9 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
             syncFile objmap tmp (pathToObjKey fn) c
 
     logMsg INFO "sync job completed"
+
+    unless (null missing) $
+      fail ("Encountered " ++ show (length missing) ++ " package(s) with missing SHA256 sum")
 
     return ExitSuccess
   where
@@ -256,7 +261,7 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
                             then pure () -- OK
                             else do
                               logMsg CRITICAL "MD5 corruption"
-                              fail "MD5 corruption"
+                              fail ("MD5 corruption " ++ show tmp ++ "  " ++ show (OMI{..}))
                         return ()
                 -- loop
                 worker idxQ objmap thrId conn
@@ -265,4 +270,3 @@ main2 Opts{..} S3Cfg{..} = handle pure $ do
         popQ (x:xs) = (xs, Just x)
 
 ----------------------------------------------------------------------------
-

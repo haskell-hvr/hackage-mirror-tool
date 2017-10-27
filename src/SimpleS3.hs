@@ -3,7 +3,11 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Simple lightweight S3 API implementation
+-- |
+-- Copyright : Herbert Valerio Riedel
+-- License   : GPLv3
+--
+-- Simple lightweight S3 API implementation
 --
 -- NB: This has been tested only against Dreamhost's S3 service so far
 module SimpleS3
@@ -74,7 +78,7 @@ s3ListStreamAllObjects S3Cfg{..} = go Nothing Nothing
     go mmarker Nothing = do
         res <- try $ establishConnection s3cfgBaseUrl
         case res of
-          Left e -> pure (S3ListEx e (go mmarker Nothing))
+          Left e  -> pure (S3ListEx e (go mmarker Nothing))
           Right c -> go mmarker (Just c)
     go mmarker (Just c) = do
         res <- try $ s3ListObjects1 S3Cfg{..} c "" mmarker True
@@ -145,7 +149,7 @@ s3ListObjects1 (s3cfg@S3Cfg {..}) c pfx marker recurse = do
     isTrunc <- case s3xmlGetStr lbresult "IsTruncated" of
             Just "true"  -> pure True
             Just "false" -> pure False
-            _ -> fail "invalid or missing IsTruncated field"
+            _            -> fail "invalid or missing IsTruncated field"
 
     return (isTrunc,conts)
   where
@@ -235,7 +239,7 @@ genSignatureV2 (S3Cfg {..}) verb (cmd5,ctype,date) amzhdrs objkey = B64.encode s
         GET    -> "GET"
         HEAD   -> "HEAD"
         DELETE -> "DELETE"
-        _ -> error "genSignatureV2: unsupported verb"
+        _      -> error "genSignatureV2: unsupported verb"
 
 
 formatRFC1123 :: UTCTime -> ByteString

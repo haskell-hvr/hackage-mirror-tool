@@ -1,3 +1,7 @@
+-- |
+-- Copyright : Herbert Valerio Riedel
+-- License   : GPLv3
+--
 module IndexClient
     ( updateIndex
     , HasUpdates(..)
