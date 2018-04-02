@@ -23,28 +23,28 @@ module SimpleS3
 
 import           Common
 
-import qualified Blaze.ByteString.Builder as Builder
 import           Control.Exception
 import           Control.Monad
-import qualified Crypto.Hash.MD5          as MD5
-import qualified Crypto.Hash.SHA1         as SHA1
-import qualified Data.ByteString          as BS
-import qualified Data.ByteString.Base64   as B64
-import qualified Data.ByteString.Char8    as BC8
+import qualified Crypto.Hash.MD5         as MD5
+import qualified Crypto.Hash.SHA1        as SHA1
+import qualified Data.ByteString         as BS
+import qualified Data.ByteString.Base64  as B64
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Char8   as BC8
 -- import           Data.ByteString.Lazy (toStrict,fromStrict)
-import qualified Data.ByteString.Short    as BSS
-import qualified Data.HashMap.Strict      as HM
+import qualified Data.ByteString.Short   as BSS
+import qualified Data.HashMap.Strict     as HM
 import           Data.String
-import           Data.Time                (UTCTime)
-import           Data.Time.Clock          (getCurrentTime)
+import           Data.Time               (UTCTime)
+import           Data.Time.Clock         (getCurrentTime)
 -- import           Data.Time.Clock.POSIX (getPOSIXTime)
 import           Data.List
-import           Data.Time.Format         (defaultTimeLocale)
-import qualified Data.Time.Format         as DT
+import           Data.Time.Format        (defaultTimeLocale)
+import qualified Data.Time.Format        as DT
 import           Network.Http.Client
-import qualified System.IO.Streams        as Streams
-import           Text.Read                (readMaybe)
-import qualified Text.XML.Light           as X
+import qualified System.IO.Streams       as Streams
+import           Text.Read               (readMaybe)
+import qualified Text.XML.Light          as X
 
 data S3Cfg = S3Cfg
     { s3cfgBaseUrl   :: !URL          -- ^ Only the host-part is used currently, as it's the preferred scheme by Dreamhost
@@ -184,7 +184,7 @@ s3PutObject (s3cfg@S3Cfg {..}) c objdata objkey = do
         _ -> "application/binary"
 
     bsBody :: ByteString -> Streams.OutputStream Builder.Builder -> IO ()
-    bsBody bs = Streams.write (Just (Builder.fromByteString bs))
+    bsBody bs = Streams.write (Just (Builder.byteString bs))
 
 -- | Wrapper around 'genSignatureV2', sets basic AWS headers
 setAWSHeaders :: S3Cfg

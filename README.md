@@ -1,4 +1,4 @@
-Hackage mirroring tool  [![Build Status](https://travis-ci.org/hvr/hackage-mirror-tool.svg?branch=master)](https://travis-ci.org/hvr/hackage-mirror-tool)
+Hackage mirroring tool  [![Build Status](https://travis-ci.org/haskell-hvr/hackage-mirror-tool.svg?branch=master)](https://travis-ci.org/haskell-hvr/hackage-mirror-tool)
 ======================
 
 
